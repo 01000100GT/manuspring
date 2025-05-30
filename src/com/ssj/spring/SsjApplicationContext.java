@@ -1,7 +1,9 @@
 package com.ssj.spring;
 
+import java.beans.Introspector;
 import java.io.File;
 import java.io.FileFilter;
+import java.lang.reflect.Field;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,11 +39,14 @@ public class SsjApplicationContext {
             Component component = componentClass.getAnnotation(Component.class);
             String beanName = component.value();
             // 如果没有指定bean名称, 使用类名首字母小写
-            if ("".equals(beanName)) {
-                String className = componentClass.getSimpleName();
-                // 首字母转小写 + 后续名字截取除了第一个字母之外的字符串
-                beanName = className.substring(0, 1).toLowerCase() + className.substring(1);
-            }
+            // // 我自己写的
+            // if ("".equals(beanName)) {
+            // String className = componentClass.getSimpleName();
+            // // 首字母转小写 + 后续名字截取除了第一个字母之外的字符串
+            // beanName = className.substring(0, 1).toLowerCase() + className.substring(1);
+            // }
+            // 使用java Bean规范的标准实现 Spring 框架本身也使用 Introspector.decapitalize()
+            beanName = Introspector.decapitalize(componentClass.getSimpleName());
 
             // 创建 BeanDefinition对象
             BeanDefinition beanDefinition = new BeanDefinition(componentClass);
@@ -140,7 +145,9 @@ public class SsjApplicationContext {
             if (singletonBean == null) {
                 // 如果不存在，则创建并放入单例池
                 try {
-                    singletonBean = beanDefinition.getType().getDeclaredConstructor().newInstance();
+                    // singletonBean =
+                    // beanDefinition.getType().getDeclaredConstructor().newInstance();
+                    singletonBean = createBean(beanName, beanDefinition);
                     singletonObjects.put(beanName, singletonBean);
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to create singleton bean: " + beanName, e);
@@ -149,29 +156,31 @@ public class SsjApplicationContext {
             return singletonBean;
         } else {
             // prototype 作用域，每次都创建新实例
-            try {
-                return beanDefinition.getType().getDeclaredConstructor().newInstance();
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to create prototype bean: " + beanName, e);
-            }
+            // try {
+            // return beanDefinition.getType().getDeclaredConstructor().newInstance();
+            // } catch (Exception e) {
+            // throw new RuntimeException("Failed to create prototype bean: " + beanName,
+            // e);
+            // }
+            return createBean(beanName, beanDefinition);
         }
     }
 
-    // private void createSingletonBeans() {
-    // for (BeanDefinition beanDefinition : beanDefinitionMap.values()) {
-    // if ("singleton".equals(beanDefinition.getScope())) {
-    // String beanName = beanDefinition.getBeanName();
-    // // Create singleton bean instance
-    // try {
-    // Object singletonBean =
-    // beanDefinition.getType().getDeclaredConstructor().newInstance();
-    // // 将实例放入单例池
-    // singletonObjects.put(beanName, singletonBean);
-    // } catch (Exception e) {
-    // throw new RuntimeException("Failed to create singleton bean: " + beanName,
-    // e);
-    // }
-    // }
-    // }
-    // }
+    // 依赖注入支持
+    private Object createBean(String beanName, BeanDefinition beanDefinition) {
+        try {
+            Object instance = beanDefinition.getType().getDeclaredConstructor().newInstance();
+            // 处理依赖注入
+            for (Field field : beanDefinition.getType().getDeclaredFields()) {
+                if (field.isAnnotationPresent(Autowired.class)) {
+                    field.setAccessible(true);
+                    String fieldBeanName = Introspector.decapitalize(field.getType().getSimpleName());
+                    field.set(instance, getBean(fieldBeanName));
+                }
+            }
+            return instance;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create bean: " + beanName, e);
+        }
+    }
 }
