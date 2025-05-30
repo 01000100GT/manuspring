@@ -1,7 +1,7 @@
 package com.ssj.spring;
 
 public class BeanDefinition {
-    private Class<?> type;
+    private Class<?> type; 
     private String scope;
     private String beanName;
 

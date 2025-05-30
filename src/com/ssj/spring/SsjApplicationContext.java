@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SsjApplicationContext {
     private Class<?> configClass;
     private ConcurrentHashMap<String, BeanDefinition> beanDefinitionMap = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<String, Object> singletonObjects = new ConcurrentHashMap<>();
 
     public SsjApplicationContext(Class<?> configClass) {
         this.configClass = configClass;
@@ -25,6 +26,10 @@ public class SsjApplicationContext {
                 doScan(componentClass);
             }
         }
+
+        // 扫描结束后应该把单例bean创建
+        // createSingletonBeans(); // getBean方法实现了懒加载, 每次getBean的时候判断是否创建bean 这里可以不使用
+
     }
 
     private void doScan(Class<?> componentClass) {
@@ -123,6 +128,50 @@ public class SsjApplicationContext {
     }
 
     public Object getBean(String beanName) {
-        return null;
+        BeanDefinition beanDefinition = beanDefinitionMap.get(beanName);
+        if (beanDefinition == null) {
+            throw new RuntimeException("No bean named " + beanName + " is defined.");
+        }
+
+        String scope = beanDefinition.getScope();
+        if ("singleton".equals(scope)) {
+            // 从单例池中获取
+            Object singletonBean = singletonObjects.get(beanName);
+            if (singletonBean == null) {
+                // 如果不存在，则创建并放入单例池
+                try {
+                    singletonBean = beanDefinition.getType().getDeclaredConstructor().newInstance();
+                    singletonObjects.put(beanName, singletonBean);
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to create singleton bean: " + beanName, e);
+                }
+            }
+            return singletonBean;
+        } else {
+            // prototype 作用域，每次都创建新实例
+            try {
+                return beanDefinition.getType().getDeclaredConstructor().newInstance();
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to create prototype bean: " + beanName, e);
+            }
+        }
     }
+
+    // private void createSingletonBeans() {
+    // for (BeanDefinition beanDefinition : beanDefinitionMap.values()) {
+    // if ("singleton".equals(beanDefinition.getScope())) {
+    // String beanName = beanDefinition.getBeanName();
+    // // Create singleton bean instance
+    // try {
+    // Object singletonBean =
+    // beanDefinition.getType().getDeclaredConstructor().newInstance();
+    // // 将实例放入单例池
+    // singletonObjects.put(beanName, singletonBean);
+    // } catch (Exception e) {
+    // throw new RuntimeException("Failed to create singleton bean: " + beanName,
+    // e);
+    // }
+    // }
+    // }
+    // }
 }
