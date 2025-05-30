@@ -3,9 +3,9 @@ package com.ssj.service;
 import com.ssj.spring.Component;
 import com.ssj.spring.Scope;
 
-@Component("userService1")
+@Component("userService")
 // @Scope("prototype")
-@Scope("singleton")
+@Scope("")
 public class UserService {
 
 }
